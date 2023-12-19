@@ -1423,7 +1423,7 @@ class AlexaModeController(AlexaCapability):
                 return f"{cover.ATTR_POSITION}.{mode}"
 
         # Valve position state
-        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+        if self.instance == f"{valve.DOMAIN}.state":
             # Return state instead of position when using ModeController.
             state = self.entity.state
             if state in (
@@ -1433,7 +1433,7 @@ class AlexaModeController(AlexaCapability):
                 valve.STATE_CLOSING,
                 STATE_UNKNOWN,
             ):
-                return f"{valve.ATTR_POSITION}.{state}"
+                return f"state.{state}"
 
         return None
 
@@ -1512,24 +1512,34 @@ class AlexaModeController(AlexaCapability):
             return self._resource.serialize_capability_resources()
 
         # Valve position resources
-        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+        if self.instance == f"{valve.DOMAIN}.state":
+            supported_features = self.entity.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
             self._resource = AlexaModeResource(
                 ["Position", AlexaGlobalCatalog.SETTING_OPENING], False
             )
-            self._resource.add_mode(
-                f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}",
-                [AlexaGlobalCatalog.VALUE_OPEN],
-            )
-            self._resource.add_mode(
-                f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}",
-                [AlexaGlobalCatalog.VALUE_CLOSE],
-            )
-            aupported_features = self.entity.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
-            if aupported_features & valve.ValveEntityFeature.STOP:
+            modes = 0
+            if supported_features & valve.ValveEntityFeature.OPEN:
                 self._resource.add_mode(
-                    f"{valve.ATTR_POSITION}.stop",
+                    f"state.{valve.STATE_OPEN}",
+                    [AlexaGlobalCatalog.VALUE_OPEN],
+                )
+                modes += 1
+            if supported_features & valve.ValveEntityFeature.CLOSE:
+                self._resource.add_mode(
+                    f"state.{valve.STATE_CLOSED}",
+                    [AlexaGlobalCatalog.VALUE_CLOSE],
+                )
+                modes += 1
+            if supported_features & valve.ValveEntityFeature.STOP:
+                self._resource.add_mode(
+                    "state.stop",
                     ["Stop", AlexaGlobalCatalog.SETTING_PRESET],
                 )
+                modes += 1
+
+            # Alexa requiers at least 2 modes
+            if modes == 1:
+                self._resource.add_mode(f"state.{PRESET_MODE_NA}", [PRESET_MODE_NA])
 
             return self._resource.serialize_capability_resources()
 
@@ -1572,31 +1582,29 @@ class AlexaModeController(AlexaCapability):
             return self._semantics.serialize_semantics()
 
         # Valve Position
-        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
-            lower_labels = [AlexaSemantics.ACTION_LOWER]
-            raise_labels = [AlexaSemantics.ACTION_RAISE]
+        if self.instance == f"{valve.DOMAIN}.state":
+            close_labels = [AlexaSemantics.ACTION_CLOSE]
+            open_labels = [AlexaSemantics.ACTION_OPEN]
             self._semantics = AlexaSemantics()
 
-            lower_labels.append(AlexaSemantics.ACTION_CLOSE)
-            raise_labels.append(AlexaSemantics.ACTION_OPEN)
             self._semantics.add_states_to_value(
                 [AlexaSemantics.STATES_CLOSED],
-                f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}",
+                f"state.{valve.STATE_CLOSED}",
             )
             self._semantics.add_states_to_value(
                 [AlexaSemantics.STATES_OPEN],
-                f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}",
+                f"state.{valve.STATE_OPEN}",
             )
 
             self._semantics.add_action_to_directive(
-                lower_labels,
+                close_labels,
                 "SetMode",
-                {"mode": f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}"},
+                {"mode": f"state.{valve.STATE_CLOSED}"},
             )
             self._semantics.add_action_to_directive(
-                raise_labels,
+                open_labels,
                 "SetMode",
-                {"mode": f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}"},
+                {"mode": f"state.{valve.STATE_OPEN}"},
             )
 
             return self._semantics.serialize_semantics()

@@ -1175,8 +1175,8 @@ async def async_api_set_mode(
         elif position == "custom":
             service = cover.SERVICE_STOP_COVER
 
-    # Valve Position
-    elif instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+    # Valve position state
+    elif instance == f"{valve.DOMAIN}.state":
         position = mode.split(".")[1]
 
         if position == valve.STATE_CLOSED:

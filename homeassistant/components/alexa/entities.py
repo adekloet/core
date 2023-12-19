@@ -965,12 +965,12 @@ class ValveCapabilities(AlexaEntity):
             yield AlexaRangeController(
                 self.entity, instance=f"{valve.DOMAIN}.{valve.ATTR_POSITION}"
             )
-        elif supported & (
-            valve.ValveEntityFeature.CLOSE | valve.ValveEntityFeature.OPEN
+        if supported & (
+            valve.ValveEntityFeature.CLOSE
+            | valve.ValveEntityFeature.OPEN
+            | valve.ValveEntityFeature.STOP
         ):
-            yield AlexaModeController(
-                self.entity, instance=f"{valve.DOMAIN}.{valve.ATTR_POSITION}"
-            )
+            yield AlexaModeController(self.entity, instance=f"{valve.DOMAIN}.state")
         yield AlexaEndpointHealth(self.hass, self.entity)
         yield Alexa(self.entity)
 

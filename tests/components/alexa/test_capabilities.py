@@ -692,6 +692,81 @@ async def test_report_valve_range_value(hass: HomeAssistant) -> None:
     properties.assert_equal("Alexa.RangeController", "rangeValue", 0)
 
 
+@pytest.mark.parametrize(
+    ("supported_features", "has_mode_controller", "has_range_controller"),
+    [
+        (ValveEntityFeature(0), False, False),
+        (
+            ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE
+            | ValveEntityFeature.STOP,
+            True,
+            False,
+        ),
+        (
+            ValveEntityFeature.OPEN,
+            True,
+            False,
+        ),
+        (
+            ValveEntityFeature.CLOSE,
+            True,
+            False,
+        ),
+        (
+            ValveEntityFeature.STOP,
+            True,
+            False,
+        ),
+        (
+            ValveEntityFeature.SET_POSITION,
+            False,
+            True,
+        ),
+        (
+            ValveEntityFeature.STOP | ValveEntityFeature.SET_POSITION,
+            True,
+            True,
+        ),
+        (
+            ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE
+            | ValveEntityFeature.SET_POSITION,
+            True,
+            True,
+        ),
+    ],
+)
+async def test_report_valve_mode_value(
+    hass: HomeAssistant,
+    supported_features: ValveEntityFeature,
+    has_mode_controller: bool,
+    has_range_controller: bool,
+) -> None:
+    """Test NModeController reports valve modes correctly."""
+    hass.states.async_set(
+        "valve.custom",
+        "opening",
+        {
+            "friendly_name": "Custom valve",
+            "current_position": 0,
+            "supported_features": supported_features,
+        },
+    )
+
+    properties = await reported_properties(hass, "valve.custom")
+
+    if has_mode_controller:
+        properties.assert_equal("Alexa.ModeController", "mode", "state.opening")
+    else:
+        properties.assert_not_has_property("Alexa.ModeController", "mode")
+
+    if has_range_controller:
+        properties.assert_equal("Alexa.RangeController", "rangeValue", 0)
+    else:
+        properties.assert_not_has_property("Alexa.RangeController", "rangeValue")
+
+
 async def test_report_climate_state(hass: HomeAssistant) -> None:
     """Test ThermostatController reports state correctly."""
     for auto_modes in (HVACMode.AUTO, HVACMode.HEAT_COOL):

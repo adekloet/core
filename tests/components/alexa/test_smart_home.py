@@ -2184,10 +2184,15 @@ async def test_valve_position(
 
     capabilities = assert_endpoint_capabilities(
         appliance,
+        "Alexa.ModeController",
         "Alexa.RangeController",
         "Alexa.EndpointHealth",
         "Alexa",
     )
+
+    mode_capability = get_capability(capabilities, "Alexa.ModeController")
+    assert mode_capability is not None
+    assert mode_capability["instance"] == "valve.state"
 
     range_capability = get_capability(capabilities, "Alexa.RangeController")
     assert range_capability is not None
@@ -2407,6 +2412,7 @@ async def test_valve_position_range(
 
     capabilities = assert_endpoint_capabilities(
         appliance,
+        "Alexa.ModeController",
         "Alexa.RangeController",
         "Alexa.EndpointHealth",
         "Alexa",
@@ -3847,7 +3853,7 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
 
     mode_capability = get_capability(capabilities, "Alexa.ModeController")
     assert mode_capability is not None
-    assert mode_capability["instance"] == "valve.position"
+    assert mode_capability["instance"] == "valve.state"
 
     properties = mode_capability["properties"]
     assert properties["nonControllable"] is False
@@ -3872,7 +3878,7 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
     supported_modes = configuration["supportedModes"]
     assert supported_modes is not None
     assert {
-        "value": "position.open",
+        "value": "state.open",
         "modeResources": {
             "friendlyNames": [
                 {"@type": "asset", "value": {"assetId": "Alexa.Value.Open"}}
@@ -3880,10 +3886,19 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         },
     } in supported_modes
     assert {
-        "value": "position.closed",
+        "value": "state.closed",
         "modeResources": {
             "friendlyNames": [
                 {"@type": "asset", "value": {"assetId": "Alexa.Value.Close"}}
+            ]
+        },
+    } in supported_modes
+    assert {
+        "value": "state.stop",
+        "modeResources": {
+            "friendlyNames": [
+                {"@type": "text", "value": {"text": "Stop", "locale": "en-US"}},
+                {"@type": "asset", "value": {"assetId": "Alexa.Setting.Preset"}},
             ]
         },
     } in supported_modes
@@ -3896,13 +3911,13 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
     assert position_action_mappings is not None
     assert {
         "@type": "ActionsToDirective",
-        "actions": ["Alexa.Actions.Lower", "Alexa.Actions.Close"],
-        "directive": {"name": "SetMode", "payload": {"mode": "position.closed"}},
+        "actions": ["Alexa.Actions.Close"],
+        "directive": {"name": "SetMode", "payload": {"mode": "state.closed"}},
     } in position_action_mappings
     assert {
         "@type": "ActionsToDirective",
-        "actions": ["Alexa.Actions.Raise", "Alexa.Actions.Open"],
-        "directive": {"name": "SetMode", "payload": {"mode": "position.open"}},
+        "actions": ["Alexa.Actions.Open"],
+        "directive": {"name": "SetMode", "payload": {"mode": "state.open"}},
     } in position_action_mappings
 
     position_state_mappings = position_semantics["stateMappings"]
@@ -3910,12 +3925,12 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
     assert {
         "@type": "StatesToValue",
         "states": ["Alexa.States.Closed"],
-        "value": "position.closed",
+        "value": "state.closed",
     } in position_state_mappings
     assert {
         "@type": "StatesToValue",
         "states": ["Alexa.States.Open"],
-        "value": "position.open",
+        "value": "state.open",
     } in position_state_mappings
 
     _, msg = await assert_request_calls_service(
@@ -3924,13 +3939,13 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         "valve#test_mode",
         "valve.close_valve",
         hass,
-        payload={"mode": "position.closed"},
-        instance="valve.position",
+        payload={"mode": "state.closed"},
+        instance="valve.state",
     )
     properties = msg["context"]["properties"][0]
     assert properties["name"] == "mode"
     assert properties["namespace"] == "Alexa.ModeController"
-    assert properties["value"] == "position.closed"
+    assert properties["value"] == "state.closed"
 
     _, msg = await assert_request_calls_service(
         "Alexa.ModeController",
@@ -3938,13 +3953,13 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         "valve#test_mode",
         "valve.open_valve",
         hass,
-        payload={"mode": "position.open"},
-        instance="valve.position",
+        payload={"mode": "state.open"},
+        instance="valve.state",
     )
     properties = msg["context"]["properties"][0]
     assert properties["name"] == "mode"
     assert properties["namespace"] == "Alexa.ModeController"
-    assert properties["value"] == "position.open"
+    assert properties["value"] == "state.open"
 
     call, msg = await assert_request_calls_service(
         "Alexa.ModeController",
@@ -3952,13 +3967,13 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         "valve#test_mode",
         "valve.stop_valve",
         hass,
-        payload={"mode": "position.stop"},
-        instance="valve.position",
+        payload={"mode": "state.stop"},
+        instance="valve.state",
     )
     properties = msg["context"]["properties"][0]
     assert properties["name"] == "mode"
     assert properties["namespace"] == "Alexa.ModeController"
-    assert properties["value"] == "position.stop"
+    assert properties["value"] == "state.stop"
     assert call.data == {"entity_id": "valve.test_mode"}
     assert call.domain == VALVE_DOMAIN
     assert call.service == SERVICE_STOP_VALVE
