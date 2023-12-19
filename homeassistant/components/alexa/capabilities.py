@@ -19,6 +19,7 @@ from homeassistant.components import (
     number,
     timer,
     vacuum,
+    valve,
 )
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntityFeature,
@@ -1421,6 +1422,19 @@ class AlexaModeController(AlexaCapability):
             ):
                 return f"{cover.ATTR_POSITION}.{mode}"
 
+        # Valve position state
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            # Return state instead of position when using ModeController.
+            state = self.entity.state
+            if mode in (
+                valve.STATE_OPEN,
+                valve.STATE_OPENING,
+                valve.STATE_CLOSED,
+                valve.STATE_CLOSING,
+                STATE_UNKNOWN,
+            ):
+                return f"{valve.ATTR_POSITION}.{state}"
+
         return None
 
     def configuration(self) -> dict[str, Any] | None:
@@ -1497,6 +1511,28 @@ class AlexaModeController(AlexaCapability):
             )
             return self._resource.serialize_capability_resources()
 
+        # Valve position resources
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            self._resource = AlexaModeResource(
+                ["Position", AlexaGlobalCatalog.SETTING_OPENING], False
+            )
+            self._resource.add_mode(
+                f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}",
+                [AlexaGlobalCatalog.VALUE_OPEN],
+            )
+            self._resource.add_mode(
+                f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}",
+                [AlexaGlobalCatalog.VALUE_CLOSE],
+            )
+            aupported_features = self.entity.attributes.get(ATTR_SUPPORTED_FEATURES, 0)
+            if aupported_features & valve.ValveEntityFeature.STOP:
+                self._resource.add_mode(
+                    f"{valve.ATTR_POSITION}.stop",
+                    ["Stop", AlexaGlobalCatalog.SETTING_PRESET],
+                )
+
+            return self._resource.serialize_capability_resources()
+
         return {}
 
     def semantics(self) -> dict[str, Any] | None:
@@ -1531,6 +1567,36 @@ class AlexaModeController(AlexaCapability):
                 raise_labels,
                 "SetMode",
                 {"mode": f"{cover.ATTR_POSITION}.{cover.STATE_OPEN}"},
+            )
+
+            return self._semantics.serialize_semantics()
+
+        # Valve Position
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            lower_labels = [AlexaSemantics.ACTION_LOWER]
+            raise_labels = [AlexaSemantics.ACTION_RAISE]
+            self._semantics = AlexaSemantics()
+
+            lower_labels.append(AlexaSemantics.ACTION_CLOSE)
+            raise_labels.append(AlexaSemantics.ACTION_OPEN)
+            self._semantics.add_states_to_value(
+                [AlexaSemantics.STATES_CLOSED],
+                f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}",
+            )
+            self._semantics.add_states_to_value(
+                [AlexaSemantics.STATES_OPEN],
+                f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}",
+            )
+
+            self._semantics.add_action_to_directive(
+                lower_labels,
+                "SetMode",
+                {"mode": f"{valve.ATTR_POSITION}.{valve.STATE_CLOSED}"},
+            )
+            self._semantics.add_action_to_directive(
+                raise_labels,
+                "SetMode",
+                {"mode": f"{valve.ATTR_POSITION}.{valve.STATE_OPEN}"},
             )
 
             return self._semantics.serialize_semantics()
@@ -1647,6 +1713,10 @@ class AlexaRangeController(AlexaCapability):
                     (i for i, v in enumerate(speed_list) if v == speed), None
                 )
                 return speed_index
+
+        # Valve Position
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            return self.entity.attributes.get(valve.ATTR_CURRENT_POSITION)
 
         return None
 
@@ -1771,6 +1841,17 @@ class AlexaRangeController(AlexaCapability):
 
             return self._resource.serialize_capability_resources()
 
+        # Valve Position Resources
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            self._resource = AlexaPresetResource(
+                ["Position", AlexaGlobalCatalog.SETTING_OPENING],
+                min_value=0,
+                max_value=100,
+                precision=1,
+                unit=AlexaGlobalCatalog.UNIT_PERCENT,
+            )
+            return self._resource.serialize_capability_resources()
+
         return {}
 
     def semantics(self) -> dict[str, Any] | None:
@@ -1844,6 +1925,27 @@ class AlexaRangeController(AlexaCapability):
             )
             self._semantics.add_action_to_directive(
                 raise_labels, "SetRangeValue", {"rangeValue": max_value}
+            )
+            return self._semantics.serialize_semantics()
+
+        # Valve Position
+        if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+            lower_labels = [AlexaSemantics.ACTION_LOWER]
+            raise_labels = [AlexaSemantics.ACTION_RAISE]
+            self._semantics = AlexaSemantics()
+
+            lower_labels.append(AlexaSemantics.ACTION_CLOSE)
+            raise_labels.append(AlexaSemantics.ACTION_OPEN)
+            self._semantics.add_states_to_value([AlexaSemantics.STATES_CLOSED], value=0)
+            self._semantics.add_states_to_range(
+                [AlexaSemantics.STATES_OPEN], min_value=1, max_value=100
+            )
+
+            self._semantics.add_action_to_directive(
+                lower_labels, "SetRangeValue", {"rangeValue": 0}
+            )
+            self._semantics.add_action_to_directive(
+                raise_labels, "SetRangeValue", {"rangeValue": 100}
             )
             return self._semantics.serialize_semantics()
 

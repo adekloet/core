@@ -22,6 +22,7 @@ from homeassistant.components import (
     number,
     timer,
     vacuum,
+    valve,
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -174,6 +175,8 @@ async def async_api_turn_on(
         )
         if not supported & power_features:
             service = media_player.SERVICE_MEDIA_PLAY
+    elif domain == valve.DOMAIN:
+        service = valve.SERVICE_OPEN_VALVE
 
     await hass.services.async_call(
         domain,
@@ -223,6 +226,8 @@ async def async_api_turn_off(
         )
         if not supported & power_features:
             service = media_player.SERVICE_MEDIA_STOP
+    elif domain == valve.DOMAIN:
+        service = valve.SERVICE_CLOSE_VALVE
 
     await hass.services.async_call(
         domain,
@@ -1174,6 +1179,17 @@ async def async_api_set_mode(
         elif position == "custom":
             service = cover.SERVICE_STOP_COVER
 
+    # Valve Position
+    elif instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+        position = mode.split(".")[1]
+
+        if position == valve.STATE_CLOSED:
+            service = valve.SERVICE_CLOSE_VALVE
+        elif position == valve.STATE_OPEN:
+            service = valve.SERVICE_OPEN_VALVE
+        elif position == "stop":
+            service = valve.SERVICE_STOP_VALVE
+
     if not service:
         raise AlexaInvalidDirectiveError(DIRECTIVE_NOT_SUPPORTED)
 
@@ -1375,6 +1391,17 @@ async def async_api_set_range(
 
         data[vacuum.ATTR_FAN_SPEED] = speed
 
+    # Valve Position
+    elif instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+        range_value = int(range_value)
+        if supported & valve.ValveEntityFeature.CLOSE and range_value == 0:
+            service = valve.SERVICE_CLOSE_VALVE
+        elif supported & valve.ValveEntityFeature.OPEN and range_value == 100:
+            service = valve.SERVICE_OPEN_VALVE
+        else:
+            service = valve.SERVICE_SET_VALVE_POSITION
+            data[valve.ATTR_POSITION] = range_value
+
     else:
         raise AlexaInvalidDirectiveError(DIRECTIVE_NOT_SUPPORTED)
 
@@ -1519,6 +1546,21 @@ async def async_api_adjust_range(
             (v for i, v in enumerate(speed_list) if i == new_speed_index), None
         )
         data[vacuum.ATTR_FAN_SPEED] = response_value = speed
+
+    # Valve Position
+    elif instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
+        range_delta = int(range_delta * 20) if range_delta_default else int(range_delta)
+        service = valve.SERVICE_SET_VALVE_POSITION
+        if not (current := entity.attributes.get(valve.ATTR_POSITION)):
+            msg = f"Unable to determine {entity.entity_id} current position"
+            raise AlexaInvalidValueError(msg)
+        position = response_value = min(100, max(0, range_delta + current))
+        if position == 100:
+            service = valve.SERVICE_OPEN_VALVE
+        elif position == 0:
+            service = valve.SERVICE_CLOSE_VALVE
+        else:
+            data[valve.ATTR_POSITION] = position
 
     else:
         raise AlexaInvalidDirectiveError(DIRECTIVE_NOT_SUPPORTED)
