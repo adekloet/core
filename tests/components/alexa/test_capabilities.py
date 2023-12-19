@@ -645,6 +645,46 @@ async def test_report_cover_range_value(hass: HomeAssistant) -> None:
     properties.assert_equal("Alexa.RangeController", "rangeValue", 0)
 
 
+async def test_report_valve_range_value(hass: HomeAssistant) -> None:
+    """Test RangeController reports valve position correctly."""
+    hass.states.async_set(
+        "valve.fully_open",
+        "open",
+        {
+            "friendly_name": "Fully open valve",
+            "current_position": 100,
+            "supported_features": 15,
+        },
+    )
+    hass.states.async_set(
+        "valve.half_open",
+        "open",
+        {
+            "friendly_name": "Half open valve",
+            "current_position": 50,
+            "supported_features": 15,
+        },
+    )
+    hass.states.async_set(
+        "valve.closed",
+        "closed",
+        {
+            "friendly_name": "Closed valve",
+            "current_position": 0,
+            "supported_features": 15,
+        },
+    )
+
+    properties = await reported_properties(hass, "valve.fully_open")
+    properties.assert_equal("Alexa.RangeController", "rangeValue", 100)
+
+    properties = await reported_properties(hass, "valve.half_open")
+    properties.assert_equal("Alexa.RangeController", "rangeValue", 50)
+
+    properties = await reported_properties(hass, "valve.closed")
+    properties.assert_equal("Alexa.RangeController", "rangeValue", 0)
+
+
 async def test_report_climate_state(hass: HomeAssistant) -> None:
     """Test ThermostatController reports state correctly."""
     for auto_modes in (HVACMode.AUTO, HVACMode.HEAT_COOL):

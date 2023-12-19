@@ -9,6 +9,7 @@ import homeassistant.components.camera as camera
 from homeassistant.components.cover import CoverDeviceClass, CoverEntityFeature
 from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.components.vacuum import VacuumEntityFeature
+from homeassistant.components.valve import ValveEntityFeature
 from homeassistant.config import async_process_ha_core_config
 from homeassistant.const import STATE_UNKNOWN, UnitOfTemperature
 from homeassistant.core import Context, Event, HomeAssistant
@@ -2069,6 +2070,190 @@ async def test_cover_position(
     assert properties["value"] == position
 
 
+@pytest.mark.parametrize(
+    ("position", "position_attr_in_service_call", "supported_features", "service_call"),
+    [
+        (
+            30,
+            30,
+            ValveEntityFeature.SET_POSITION
+            | ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE,
+            "valve.set_valve_position",
+        ),
+        (
+            0,
+            None,
+            ValveEntityFeature.SET_POSITION
+            | ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE,
+            "valve.close_valve",
+        ),
+        (
+            99,
+            99,
+            ValveEntityFeature.SET_POSITION
+            | ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE,
+            "valve.set_valve_position",
+        ),
+        (
+            100,
+            None,
+            ValveEntityFeature.SET_POSITION
+            | ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE,
+            "valve.open_valve",
+        ),
+        (
+            0,
+            0,
+            ValveEntityFeature.SET_POSITION,
+            "valve.set_valve_position",
+        ),
+        (
+            60,
+            60,
+            ValveEntityFeature.SET_POSITION,
+            "valve.set_valve_position",
+        ),
+        (
+            100,
+            100,
+            ValveEntityFeature.SET_POSITION,
+            "valve.set_valve_position",
+        ),
+        (
+            0,
+            0,
+            ValveEntityFeature.SET_POSITION | ValveEntityFeature.OPEN,
+            "valve.set_valve_position",
+        ),
+        (
+            100,
+            100,
+            ValveEntityFeature.SET_POSITION | ValveEntityFeature.CLOSE,
+            "valve.set_valve_position",
+        ),
+    ],
+    ids=[
+        "position_30_open_close",
+        "position_0_open_close",
+        "position_99_open_close",
+        "position_100_open_close",
+        "position_0_no_open_close",
+        "position_60_no_open_close",
+        "position_100_no_open_close",
+        "position_0_no_close",
+        "position_100_no_open",
+    ],
+)
+async def test_valve_position(
+    hass: HomeAssistant,
+    position: int,
+    position_attr_in_service_call: int | None,
+    supported_features: CoverEntityFeature,
+    service_call: str,
+) -> None:
+    """Test cover discovery and position using rangeController."""
+    device = (
+        "valve.test_range",
+        "open",
+        {
+            "friendly_name": "Test valve range",
+            "device_class": "water",
+            "supported_features": supported_features,
+            "position": position,
+        },
+    )
+    appliance = await discovery_test(device, hass)
+
+    assert appliance["endpointId"] == "valve#test_range"
+    assert appliance["displayCategories"][0] == "OTHER"
+    assert appliance["friendlyName"] == "Test valve range"
+
+    capabilities = assert_endpoint_capabilities(
+        appliance,
+        "Alexa.RangeController",
+        "Alexa.EndpointHealth",
+        "Alexa",
+    )
+
+    range_capability = get_capability(capabilities, "Alexa.RangeController")
+    assert range_capability is not None
+    assert range_capability["instance"] == "valve.position"
+
+    properties = range_capability["properties"]
+    assert properties["nonControllable"] is False
+    assert {"name": "rangeValue"} in properties["supported"]
+
+    capability_resources = range_capability["capabilityResources"]
+    assert capability_resources is not None
+    assert {
+        "@type": "text",
+        "value": {"text": "Position", "locale": "en-US"},
+    } in capability_resources["friendlyNames"]
+
+    assert {
+        "@type": "asset",
+        "value": {"assetId": "Alexa.Setting.Opening"},
+    } in capability_resources["friendlyNames"]
+
+    configuration = range_capability["configuration"]
+    assert configuration is not None
+    assert configuration["unitOfMeasure"] == "Alexa.Unit.Percent"
+
+    supported_range = configuration["supportedRange"]
+    assert supported_range["minimumValue"] == 0
+    assert supported_range["maximumValue"] == 100
+    assert supported_range["precision"] == 1
+
+    # Assert for Position Semantics
+    position_semantics = range_capability["semantics"]
+    assert position_semantics is not None
+
+    position_action_mappings = position_semantics["actionMappings"]
+    assert position_action_mappings is not None
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Lower", "Alexa.Actions.Close"],
+        "directive": {"name": "SetRangeValue", "payload": {"rangeValue": 0}},
+    } in position_action_mappings
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Raise", "Alexa.Actions.Open"],
+        "directive": {"name": "SetRangeValue", "payload": {"rangeValue": 100}},
+    } in position_action_mappings
+
+    position_state_mappings = position_semantics["stateMappings"]
+    assert position_state_mappings is not None
+    assert {
+        "@type": "StatesToValue",
+        "states": ["Alexa.States.Closed"],
+        "value": 0,
+    } in position_state_mappings
+    assert {
+        "@type": "StatesToRange",
+        "states": ["Alexa.States.Open"],
+        "range": {"minimumValue": 1, "maximumValue": 100},
+    } in position_state_mappings
+
+    call, msg = await assert_request_calls_service(
+        "Alexa.RangeController",
+        "SetRangeValue",
+        "valve#test_range",
+        service_call,
+        hass,
+        payload={"rangeValue": position},
+        instance="valve.position",
+    )
+    assert call.data.get("position") == position_attr_in_service_call
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "rangeValue"
+    assert properties["namespace"] == "Alexa.RangeController"
+    assert properties["value"] == position
+
+
 async def test_cover_position_range(
     hass: HomeAssistant,
 ) -> None:
@@ -2183,6 +2368,122 @@ async def test_cover_position_range(
         "cover.set_cover_position",
         "position",
         instance="cover.position",
+    )
+
+
+async def test_valve_position_range(
+    hass: HomeAssistant,
+) -> None:
+    """Test valve discovery and position range using rangeController.
+
+    Also tests an invalid valve position being handled correctly.
+    """
+
+    device = (
+        "valve.test_range",
+        "open",
+        {
+            "friendly_name": "Test valve range",
+            "device_class": "water",
+            "supported_features": 7,
+            "position": 30,
+        },
+    )
+    appliance = await discovery_test(device, hass)
+
+    assert appliance["endpointId"] == "valve#test_range"
+    assert appliance["displayCategories"][0] == "OTHER"
+    assert appliance["friendlyName"] == "Test valve range"
+
+    capabilities = assert_endpoint_capabilities(
+        appliance,
+        "Alexa.RangeController",
+        "Alexa.EndpointHealth",
+        "Alexa",
+    )
+
+    range_capability = get_capability(capabilities, "Alexa.RangeController")
+    assert range_capability is not None
+    assert range_capability["instance"] == "valve.position"
+
+    properties = range_capability["properties"]
+    assert properties["nonControllable"] is False
+    assert {"name": "rangeValue"} in properties["supported"]
+
+    capability_resources = range_capability["capabilityResources"]
+    assert capability_resources is not None
+    assert {
+        "@type": "text",
+        "value": {"text": "Position", "locale": "en-US"},
+    } in capability_resources["friendlyNames"]
+
+    assert {
+        "@type": "asset",
+        "value": {"assetId": "Alexa.Setting.Opening"},
+    } in capability_resources["friendlyNames"]
+
+    configuration = range_capability["configuration"]
+    assert configuration is not None
+    assert configuration["unitOfMeasure"] == "Alexa.Unit.Percent"
+
+    supported_range = configuration["supportedRange"]
+    assert supported_range["minimumValue"] == 0
+    assert supported_range["maximumValue"] == 100
+    assert supported_range["precision"] == 1
+
+    # Assert for Position Semantics
+    position_semantics = range_capability["semantics"]
+    assert position_semantics is not None
+
+    position_action_mappings = position_semantics["actionMappings"]
+    assert position_action_mappings is not None
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Lower", "Alexa.Actions.Close"],
+        "directive": {"name": "SetRangeValue", "payload": {"rangeValue": 0}},
+    } in position_action_mappings
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Raise", "Alexa.Actions.Open"],
+        "directive": {"name": "SetRangeValue", "payload": {"rangeValue": 100}},
+    } in position_action_mappings
+
+    position_state_mappings = position_semantics["stateMappings"]
+    assert position_state_mappings is not None
+    assert {
+        "@type": "StatesToValue",
+        "states": ["Alexa.States.Closed"],
+        "value": 0,
+    } in position_state_mappings
+    assert {
+        "@type": "StatesToRange",
+        "states": ["Alexa.States.Open"],
+        "range": {"minimumValue": 1, "maximumValue": 100},
+    } in position_state_mappings
+
+    call, msg = await assert_request_calls_service(
+        "Alexa.RangeController",
+        "AdjustRangeValue",
+        "valve#test_range",
+        "valve.close_valve",
+        hass,
+        payload={"rangeValueDelta": -99, "rangeValueDeltaDefault": False},
+        instance="valve.position",
+    )
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "rangeValue"
+    assert properties["namespace"] == "Alexa.RangeController"
+    assert properties["value"] == 0
+
+    await assert_range_changes(
+        hass,
+        [(25, -5, False), (35, 5, False), (50, 1, True), (10, -1, True)],
+        "Alexa.RangeController",
+        "AdjustRangeValue",
+        "valve#test_range",
+        "valve.set_valve_position",
+        "position",
+        instance="valve.position",
     )
 
 
@@ -3490,6 +3791,146 @@ async def test_cover_position_mode(hass: HomeAssistant) -> None:
     assert properties["name"] == "mode"
     assert properties["namespace"] == "Alexa.ModeController"
     assert properties["value"] == "position.custom"
+
+
+async def test_valve_position_mode(hass: HomeAssistant) -> None:
+    """Test valve discovery and position using modeController."""
+    device = (
+        "valve.test_mode",
+        "open",
+        {
+            "friendly_name": "Test valve mode",
+            "device_class": "water",
+            "supported_features": 3,
+        },
+    )
+    appliance = await discovery_test(device, hass)
+
+    assert appliance["endpointId"] == "valve#test_mode"
+    assert appliance["displayCategories"][0] == "OTHER"
+    assert appliance["friendlyName"] == "Test valve mode"
+
+    capabilities = assert_endpoint_capabilities(
+        appliance,
+        "Alexa.ModeController",
+        "Alexa.EndpointHealth",
+        "Alexa",
+    )
+
+    mode_capability = get_capability(capabilities, "Alexa.ModeController")
+    assert mode_capability is not None
+    assert mode_capability["instance"] == "valve.position"
+
+    properties = mode_capability["properties"]
+    assert properties["nonControllable"] is False
+    assert {"name": "mode"} in properties["supported"]
+
+    capability_resources = mode_capability["capabilityResources"]
+    assert capability_resources is not None
+    assert {
+        "@type": "text",
+        "value": {"text": "Position", "locale": "en-US"},
+    } in capability_resources["friendlyNames"]
+
+    assert {
+        "@type": "asset",
+        "value": {"assetId": "Alexa.Setting.Opening"},
+    } in capability_resources["friendlyNames"]
+
+    configuration = mode_capability["configuration"]
+    assert configuration is not None
+    assert configuration["ordered"] is False
+
+    supported_modes = configuration["supportedModes"]
+    assert supported_modes is not None
+    assert {
+        "value": "position.open",
+        "modeResources": {
+            "friendlyNames": [
+                {"@type": "asset", "value": {"assetId": "Alexa.Value.Open"}}
+            ]
+        },
+    } in supported_modes
+    assert {
+        "value": "position.closed",
+        "modeResources": {
+            "friendlyNames": [
+                {"@type": "asset", "value": {"assetId": "Alexa.Value.Close"}}
+            ]
+        },
+    } in supported_modes
+
+    # Assert for Position Semantics
+    position_semantics = mode_capability["semantics"]
+    assert position_semantics is not None
+
+    position_action_mappings = position_semantics["actionMappings"]
+    assert position_action_mappings is not None
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Lower", "Alexa.Actions.Close"],
+        "directive": {"name": "SetMode", "payload": {"mode": "position.closed"}},
+    } in position_action_mappings
+    assert {
+        "@type": "ActionsToDirective",
+        "actions": ["Alexa.Actions.Raise", "Alexa.Actions.Open"],
+        "directive": {"name": "SetMode", "payload": {"mode": "position.open"}},
+    } in position_action_mappings
+
+    position_state_mappings = position_semantics["stateMappings"]
+    assert position_state_mappings is not None
+    assert {
+        "@type": "StatesToValue",
+        "states": ["Alexa.States.Closed"],
+        "value": "position.closed",
+    } in position_state_mappings
+    assert {
+        "@type": "StatesToValue",
+        "states": ["Alexa.States.Open"],
+        "value": "position.open",
+    } in position_state_mappings
+
+    _, msg = await assert_request_calls_service(
+        "Alexa.ModeController",
+        "SetMode",
+        "valve#test_mode",
+        "valve.close_valve",
+        hass,
+        payload={"mode": "position.closed"},
+        instance="valve.position",
+    )
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "mode"
+    assert properties["namespace"] == "Alexa.ModeController"
+    assert properties["value"] == "position.closed"
+
+    _, msg = await assert_request_calls_service(
+        "Alexa.ModeController",
+        "SetMode",
+        "valve#test_mode",
+        "valve.open_valve",
+        hass,
+        payload={"mode": "position.open"},
+        instance="valve.position",
+    )
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "mode"
+    assert properties["namespace"] == "Alexa.ModeController"
+    assert properties["value"] == "position.open"
+
+    _, msg = await assert_request_calls_service(
+        "Alexa.ModeController",
+        "SetMode",
+        "valve#test_mode",
+        "valve.stop_valve",
+        hass,
+        payload={"mode": "position.stop"},
+        instance="valve.position",
+    )
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "mode"
+    assert properties["namespace"] == "Alexa.ModeController"
+    assert properties["value"] == "position.stop"
 
 
 async def test_image_processing(hass: HomeAssistant) -> None:

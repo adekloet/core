@@ -1426,7 +1426,7 @@ class AlexaModeController(AlexaCapability):
         if self.instance == f"{valve.DOMAIN}.{valve.ATTR_POSITION}":
             # Return state instead of position when using ModeController.
             state = self.entity.state
-            if mode in (
+            if state in (
                 valve.STATE_OPEN,
                 valve.STATE_OPENING,
                 valve.STATE_CLOSED,
