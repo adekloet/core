@@ -175,8 +175,6 @@ async def async_api_turn_on(
         )
         if not supported & power_features:
             service = media_player.SERVICE_MEDIA_PLAY
-    elif domain == valve.DOMAIN:
-        service = valve.SERVICE_OPEN_VALVE
 
     await hass.services.async_call(
         domain,
@@ -226,8 +224,6 @@ async def async_api_turn_off(
         )
         if not supported & power_features:
             service = media_player.SERVICE_MEDIA_STOP
-    elif domain == valve.DOMAIN:
-        service = valve.SERVICE_CLOSE_VALVE
 
     await hass.services.async_call(
         domain,

@@ -9,9 +9,18 @@ import homeassistant.components.camera as camera
 from homeassistant.components.cover import CoverDeviceClass, CoverEntityFeature
 from homeassistant.components.media_player import MediaPlayerEntityFeature
 from homeassistant.components.vacuum import VacuumEntityFeature
-from homeassistant.components.valve import ValveEntityFeature
+from homeassistant.components.valve import (
+    DOMAIN as VALVE_DOMAIN,
+    SERVICE_STOP_VALVE,
+    ValveEntityFeature,
+)
 from homeassistant.config import async_process_ha_core_config
-from homeassistant.const import STATE_UNKNOWN, UnitOfTemperature
+from homeassistant.const import (
+    SERVICE_CLOSE_VALVE,
+    SERVICE_OPEN_VALVE,
+    STATE_UNKNOWN,
+    UnitOfTemperature,
+)
 from homeassistant.core import Context, Event, HomeAssistant
 from homeassistant.helpers import entityfilter
 from homeassistant.setup import async_setup_component
@@ -2078,7 +2087,8 @@ async def test_cover_position(
             30,
             ValveEntityFeature.SET_POSITION
             | ValveEntityFeature.OPEN
-            | ValveEntityFeature.CLOSE,
+            | ValveEntityFeature.CLOSE
+            | ValveEntityFeature.STOP,
             "valve.set_valve_position",
         ),
         (
@@ -2385,7 +2395,7 @@ async def test_valve_position_range(
         {
             "friendly_name": "Test valve range",
             "device_class": "water",
-            "supported_features": 7,
+            "supported_features": 15,
             "position": 30,
         },
     )
@@ -2465,6 +2475,21 @@ async def test_valve_position_range(
         "Alexa.RangeController",
         "AdjustRangeValue",
         "valve#test_range",
+        "valve.open_valve",
+        hass,
+        payload={"rangeValueDelta": 101, "rangeValueDeltaDefault": False},
+        instance="valve.position",
+    )
+    properties = msg["context"]["properties"][0]
+    assert properties["name"] == "rangeValue"
+    assert properties["namespace"] == "Alexa.RangeController"
+    assert properties["value"] == 100
+    assert call.service == SERVICE_OPEN_VALVE
+
+    call, msg = await assert_request_calls_service(
+        "Alexa.RangeController",
+        "AdjustRangeValue",
+        "valve#test_range",
         "valve.close_valve",
         hass,
         payload={"rangeValueDelta": -99, "rangeValueDeltaDefault": False},
@@ -2474,6 +2499,7 @@ async def test_valve_position_range(
     assert properties["name"] == "rangeValue"
     assert properties["namespace"] == "Alexa.RangeController"
     assert properties["value"] == 0
+    assert call.service == SERVICE_CLOSE_VALVE
 
     await assert_range_changes(
         hass,
@@ -3801,7 +3827,9 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         {
             "friendly_name": "Test valve mode",
             "device_class": "water",
-            "supported_features": 3,
+            "supported_features": ValveEntityFeature.OPEN
+            | ValveEntityFeature.CLOSE
+            | ValveEntityFeature.STOP,
         },
     )
     appliance = await discovery_test(device, hass)
@@ -3918,7 +3946,7 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
     assert properties["namespace"] == "Alexa.ModeController"
     assert properties["value"] == "position.open"
 
-    _, msg = await assert_request_calls_service(
+    call, msg = await assert_request_calls_service(
         "Alexa.ModeController",
         "SetMode",
         "valve#test_mode",
@@ -3931,6 +3959,9 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
     assert properties["name"] == "mode"
     assert properties["namespace"] == "Alexa.ModeController"
     assert properties["value"] == "position.stop"
+    assert call.data == {"entity_id": "valve.test_mode"}
+    assert call.domain == VALVE_DOMAIN
+    assert call.service == SERVICE_STOP_VALVE
 
 
 async def test_image_processing(hass: HomeAssistant) -> None:

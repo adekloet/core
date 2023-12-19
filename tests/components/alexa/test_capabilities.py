@@ -8,6 +8,7 @@ from homeassistant.components.alexa import smart_home
 from homeassistant.components.climate import ATTR_CURRENT_TEMPERATURE, HVACMode
 from homeassistant.components.lock import STATE_JAMMED, STATE_LOCKING, STATE_UNLOCKING
 from homeassistant.components.media_player import MediaPlayerEntityFeature
+from homeassistant.components.valve import ValveEntityFeature
 from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT,
     STATE_ALARM_ARMED_AWAY,
@@ -647,13 +648,19 @@ async def test_report_cover_range_value(hass: HomeAssistant) -> None:
 
 async def test_report_valve_range_value(hass: HomeAssistant) -> None:
     """Test RangeController reports valve position correctly."""
+    all_valve_features = (
+        ValveEntityFeature.OPEN
+        | ValveEntityFeature.CLOSE
+        | ValveEntityFeature.STOP
+        | ValveEntityFeature.SET_POSITION
+    )
     hass.states.async_set(
         "valve.fully_open",
         "open",
         {
             "friendly_name": "Fully open valve",
             "current_position": 100,
-            "supported_features": 15,
+            "supported_features": all_valve_features,
         },
     )
     hass.states.async_set(
@@ -662,7 +669,7 @@ async def test_report_valve_range_value(hass: HomeAssistant) -> None:
         {
             "friendly_name": "Half open valve",
             "current_position": 50,
-            "supported_features": 15,
+            "supported_features": all_valve_features,
         },
     )
     hass.states.async_set(
@@ -671,7 +678,7 @@ async def test_report_valve_range_value(hass: HomeAssistant) -> None:
         {
             "friendly_name": "Closed valve",
             "current_position": 0,
-            "supported_features": 15,
+            "supported_features": all_valve_features,
         },
     )
 
