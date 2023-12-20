@@ -2080,7 +2080,13 @@ async def test_cover_position(
 
 
 @pytest.mark.parametrize(
-    ("position", "position_attr_in_service_call", "supported_features", "service_call"),
+    (
+        "position",
+        "position_attr_in_service_call",
+        "supported_features",
+        "service_call",
+        "has_mode_controller",
+    ),
     [
         (
             30,
@@ -2090,6 +2096,7 @@ async def test_cover_position(
             | ValveEntityFeature.CLOSE
             | ValveEntityFeature.STOP,
             "valve.set_valve_position",
+            True,
         ),
         (
             0,
@@ -2098,6 +2105,7 @@ async def test_cover_position(
             | ValveEntityFeature.OPEN
             | ValveEntityFeature.CLOSE,
             "valve.close_valve",
+            True,
         ),
         (
             99,
@@ -2106,6 +2114,7 @@ async def test_cover_position(
             | ValveEntityFeature.OPEN
             | ValveEntityFeature.CLOSE,
             "valve.set_valve_position",
+            True,
         ),
         (
             100,
@@ -2114,45 +2123,59 @@ async def test_cover_position(
             | ValveEntityFeature.OPEN
             | ValveEntityFeature.CLOSE,
             "valve.open_valve",
+            True,
         ),
         (
             0,
             0,
             ValveEntityFeature.SET_POSITION,
             "valve.set_valve_position",
+            False,
         ),
         (
             60,
             60,
             ValveEntityFeature.SET_POSITION,
             "valve.set_valve_position",
+            False,
+        ),
+        (
+            60,
+            60,
+            ValveEntityFeature.SET_POSITION | ValveEntityFeature.STOP,
+            "valve.set_valve_position",
+            True,
         ),
         (
             100,
             100,
             ValveEntityFeature.SET_POSITION,
             "valve.set_valve_position",
+            False,
         ),
         (
             0,
             0,
             ValveEntityFeature.SET_POSITION | ValveEntityFeature.OPEN,
             "valve.set_valve_position",
+            True,
         ),
         (
             100,
             100,
             ValveEntityFeature.SET_POSITION | ValveEntityFeature.CLOSE,
             "valve.set_valve_position",
+            True,
         ),
     ],
     ids=[
-        "position_30_open_close",
+        "position_30_open_close_stop",
         "position_0_open_close",
         "position_99_open_close",
         "position_100_open_close",
         "position_0_no_open_close",
         "position_60_no_open_close",
+        "position_60_stop_no_open_close",
         "position_100_no_open_close",
         "position_0_no_close",
         "position_100_no_open",
@@ -2164,6 +2187,7 @@ async def test_valve_position(
     position_attr_in_service_call: int | None,
     supported_features: CoverEntityFeature,
     service_call: str,
+    has_mode_controller: bool,
 ) -> None:
     """Test cover discovery and position using rangeController."""
     device = (
@@ -2182,17 +2206,25 @@ async def test_valve_position(
     assert appliance["displayCategories"][0] == "OTHER"
     assert appliance["friendlyName"] == "Test valve range"
 
-    capabilities = assert_endpoint_capabilities(
-        appliance,
-        "Alexa.ModeController",
-        "Alexa.RangeController",
-        "Alexa.EndpointHealth",
-        "Alexa",
-    )
+    if has_mode_controller:
+        capabilities = assert_endpoint_capabilities(
+            appliance,
+            "Alexa.ModeController",
+            "Alexa.RangeController",
+            "Alexa.EndpointHealth",
+            "Alexa",
+        )
 
-    mode_capability = get_capability(capabilities, "Alexa.ModeController")
-    assert mode_capability is not None
-    assert mode_capability["instance"] == "valve.state"
+        mode_capability = get_capability(capabilities, "Alexa.ModeController")
+        assert mode_capability is not None
+        assert mode_capability["instance"] == "valve.state"
+    else:
+        capabilities = assert_endpoint_capabilities(
+            appliance,
+            "Alexa.RangeController",
+            "Alexa.EndpointHealth",
+            "Alexa",
+        )
 
     range_capability = get_capability(capabilities, "Alexa.RangeController")
     assert range_capability is not None
