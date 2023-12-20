@@ -3913,7 +3913,7 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         "value": "state.open",
         "modeResources": {
             "friendlyNames": [
-                {"@type": "asset", "value": {"assetId": "Alexa.Value.Open"}}
+                {"@type": "text", "value": {"text": "Open", "locale": "en-US"}}
             ]
         },
     } in supported_modes
@@ -3921,7 +3921,7 @@ async def test_valve_position_mode(hass: HomeAssistant) -> None:
         "value": "state.closed",
         "modeResources": {
             "friendlyNames": [
-                {"@type": "asset", "value": {"assetId": "Alexa.Value.Close"}}
+                {"@type": "text", "value": {"text": "Closed", "locale": "en-US"}}
             ]
         },
     } in supported_modes

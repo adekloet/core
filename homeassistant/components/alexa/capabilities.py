@@ -1521,13 +1521,13 @@ class AlexaModeController(AlexaCapability):
             if supported_features & valve.ValveEntityFeature.OPEN:
                 self._resource.add_mode(
                     f"state.{valve.STATE_OPEN}",
-                    [AlexaGlobalCatalog.VALUE_OPEN],
+                    ["Open"],
                 )
                 modes += 1
             if supported_features & valve.ValveEntityFeature.CLOSE:
                 self._resource.add_mode(
                     f"state.{valve.STATE_CLOSED}",
-                    [AlexaGlobalCatalog.VALUE_CLOSE],
+                    ["Closed"],
                 )
                 modes += 1
             if supported_features & valve.ValveEntityFeature.STOP:
