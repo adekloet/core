@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import LOGGER
 
-SCAN_INTERVAL = 60  # Interval for updating the coordinator
+SCAN_INTERVAL = 120  # Interval for updating the coordinator
 
 
 class TradfriDeviceDataUpdateCoordinator(DataUpdateCoordinator[Device]):
